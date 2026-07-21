@@ -24,8 +24,37 @@ Additonally there are some utility methods:
 
 ***Note: BigStitcher-Spark is designed to work hand-in-hand with BigStitcher.** You can always verify the results of each step BigStitcher-Spark step interactively using BigStitcher by simply opening the XML. You can of course also run certain steps in BigStitcher, and others in BigStitcher-Spark. Not all functionality is 100% identical between BigStitcher and BigStitcher-Spark; important differences in terms of capabilities is described in the respective module documentation below (typically BigStitcher-Spark supports a specific feature that was hard to implement in BigStitcher and vice-versa).*
 
+## Quick Start<a name="quickstart">
+
+Run BigStitcher-Spark locally in three steps. (For cluster/cloud execution and full detail, see [Install and Run](#install).)
+
+**1. Prerequisites — Java 8 + Maven.**
+- Install **[Zulu JDK 8 + FX](https://www.azul.com/downloads/?version=java-8-lts&package=jdk-fx#zulu)** — the tested JVM, and the `+ FX` (JavaFX) build is required. **Java >=21 does not work** with the Spark version used here.
+- Install **[Apache Maven](https://maven.apache.org)**.
+- Point **`JAVA_HOME`** at that Zulu JDK 8 so Maven builds against it. Verify with `java -version` and `mvn -v` (Maven should report the Java 8 you set).
+
+**2. Build — clone and install.** Pass the cores (`-t`) and RAM in GB (`-m`) you want local Spark to use:
+```bash
+git clone https://github.com/JaneliaSciComp/BigStitcher-Spark.git
+cd BigStitcher-Spark
+./install -t 8 -m 50
+```
+This builds the code and writes the command-line tools (`resave`, `stitching`, `solver`, `affine-fusion`, `detect-interestpoints`, …) into the current directory.
+
+**3. Run.** BigStitcher-Spark is **headless** — there is no `./gui`. It is designed to work hand-in-hand with the interactive **BigStitcher GUI**, so you can drive it either way:
+
+- **Use the GUI (BigStitcher in Fiji).** The interactive GUI lives in **[Fiji](https://imagej.net/software/fiji/)**: enable it once under *Help ▸ Update… ▸ Manage update sites ▸ BigStitcher*, then **open your `dataset.xml`** via *Plugins ▸ BigStitcher ▸ BigStitcher* to define the dataset and run or **visually verify any step**. Because every Spark tool reads and writes that same XML, you can run a heavy step headless and re-open the XML in the GUI to inspect the result at any point.
+- **Or run a single headless command** — each tool takes an existing XML. For example, resave a dataset into N5 for processing:
+
+```bash
+./resave -x /path/to/dataset.xml
+```
+
+The Spark tools mostly mirror the BigStitcher GUI's options; see [Usage](#usage) for each module.
+
 ## Content
 
+* [**Quick Start**](#quickstart)
 * [**Install and Run**](#install)
   * [Local](#installlocal)
   * [Cluster](#installcluster)
