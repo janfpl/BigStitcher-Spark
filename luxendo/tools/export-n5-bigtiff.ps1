@@ -45,6 +45,13 @@ New-Item -ItemType Directory -Force -Path $classDir | Out-Null
 
 $javac = Join-Path $javaRoot.FullName "bin\javac.exe"
 $java = Join-Path $javaRoot.FullName "bin\java.exe"
+if (-not (Test-Path -LiteralPath $java)) {
+    # Some Fiji builds bundle the JVM with java.exe under <jdk>\jre\bin instead of <jdk>\bin.
+    $java = Join-Path $javaRoot.FullName "jre\bin\java.exe"
+}
+if (-not (Test-Path -LiteralPath $javac)) {
+    throw "No Java compiler at $javac (this Fiji appears to bundle a JRE only). Exporting BigTIFF compiles a small Java helper and needs a JDK. Install Zulu JDK 8 + FX and point the tools at it."
+}
 
 if ((-not (Test-Path -LiteralPath $classFile)) -or
     ((Get-Item -LiteralPath $javaSource).LastWriteTime -gt (Get-Item -LiteralPath $classFile).LastWriteTime)) {

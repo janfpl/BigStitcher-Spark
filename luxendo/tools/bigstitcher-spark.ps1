@@ -59,6 +59,10 @@ New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 
 $env:JAVA_HOME = $javaRoot.FullName
 $java = Join-Path $env:JAVA_HOME "bin\java.exe"
+if (-not (Test-Path -LiteralPath $java)) {
+    # Some Fiji builds bundle the JVM with java.exe under <jdk>\jre\bin instead of <jdk>\bin.
+    $java = Join-Path $env:JAVA_HOME "jre\bin\java.exe"
+}
 $classpath = "$jar;$deps;$sparkDeps"
 
 & $java `

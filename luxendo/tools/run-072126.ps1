@@ -73,15 +73,28 @@ function Test-FijiApp([string] $app) {
 }
 
 function Test-WrapperJavaLayout([string] $app) {
-    # Mirror exactly what the shared wrappers (bigstitcher-spark.ps1 etc.) look for:
-    # a directory matching *jdk* directly under java\win64, containing bin\java.exe.
+    # Mirror what the shared wrappers (bigstitcher-spark.ps1 etc.) look for: a directory
+    # matching *jdk* directly under java\win64, with java.exe under bin\ or jre\bin\.
     if (-not $app) { return $false }
     $win64 = Join-Path $app 'java\win64'
     if (-not (Test-Path -LiteralPath $win64)) { return $false }
     $jdk = Get-ChildItem -Directory -LiteralPath $win64 -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -like '*jdk*' } |
         Select-Object -First 1
-    return [bool]($jdk -and (Test-Path -LiteralPath (Join-Path $jdk.FullName 'bin\java.exe')))
+    if (-not $jdk) { return $false }
+    return [bool]((Test-Path -LiteralPath (Join-Path $jdk.FullName 'bin\java.exe')) -or
+                  (Test-Path -LiteralPath (Join-Path $jdk.FullName 'jre\bin\java.exe')))
+}
+
+function Get-FijiJavac([string] $app) {
+    # javac only ships with a JDK; the BigTIFF export and background-subtract steps compile
+    # a small helper and need it. Search the 'java' subtree for javac.exe.
+    if (-not $app -or -not (Test-Path -LiteralPath $app)) { return $null }
+    $searchRoot = Join-Path $app 'java'
+    if (-not (Test-Path -LiteralPath $searchRoot)) { $searchRoot = $app }
+    $javac = Get-ChildItem -LiteralPath $searchRoot -Recurse -File -Filter 'javac.exe' -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($javac) { return $javac.FullName } else { return $null }
 }
 
 if (-not (Test-Path -LiteralPath $BaseDir)) {
@@ -102,13 +115,18 @@ if (-not (Test-FijiApp $FijiAppDir)) {
 }
 $fijiJavaExe = Get-FijiJavaExe $FijiAppDir
 $wrapperJavaOk = Test-WrapperJavaLayout $FijiAppDir
+$fijiJavac = Get-FijiJavac $FijiAppDir
 Write-Host "Fiji:              $FijiAppDir"
 Write-Host "Fiji Java:         $fijiJavaExe"
 if (-not $wrapperJavaOk) {
-    Write-Host "NOTE: this Fiji's Java is not at java\win64\<*jdk*>\bin\java.exe, the exact spot the shared" -ForegroundColor Yellow
-    Write-Host "      pipeline wrappers (bigstitcher-spark.ps1 etc.) look in. This launcher finds it fine," -ForegroundColor Yellow
-    Write-Host "      but those wrappers would not until that lookup is relaxed. Share this output if you hit" -ForegroundColor Yellow
-    Write-Host "      it when running the actual pipeline and I will reconcile the wrappers too." -ForegroundColor Yellow
+    Write-Host "NOTE: this Fiji's Java is not under java\win64\<*jdk*> where the shared wrappers look;" -ForegroundColor Yellow
+    Write-Host "      the pipeline wrappers may not find it. Share this output and I will reconcile them." -ForegroundColor Yellow
+}
+if (-not $fijiJavac) {
+    Write-Host "NOTE: this Fiji bundles a JRE (no javac found). Core registration/fusion works, but" -ForegroundColor Yellow
+    Write-Host "      -ExportBigTiff and background-subtract (FusionSubtract, on by default) compile a small" -ForegroundColor Yellow
+    Write-Host "      Java helper and need a JDK. Install Zulu JDK 8 + FX, or run with -FusionSubtract 0 and" -ForegroundColor Yellow
+    Write-Host "      without -ExportBigTiff." -ForegroundColor Yellow
 }
 
 # --- Bridge Fiji into the layout the unchanged wrappers expect --------------
@@ -166,7 +184,8 @@ Write-Host ""
 Write-Host "Pre-flight for $BaseDir :"
 Show-Check "Fiji"              $true                $FijiAppDir
 Show-Check "Fiji Java"         ([bool]$fijiJavaExe) $(if ($fijiJavaExe) { $fijiJavaExe } else { "no java.exe under $FijiAppDir\java" })
-Show-Check "Wrapper Java path" $wrapperJavaOk       $(if ($wrapperJavaOk) { "java\win64\<*jdk*>\bin\java.exe present" } else { "not under java\win64\<*jdk*> (shared wrappers may need the relaxed lookup)" })
+Show-Check "Wrapper Java path" $wrapperJavaOk       $(if ($wrapperJavaOk) { "java under java\win64\<*jdk*> (bin or jre\bin)" } else { "not under java\win64\<*jdk*>" })
+Show-Check "JDK compiler javac" ([bool]$fijiJavac)  $(if ($fijiJavac) { $fijiJavac } else { "JRE only - needed for -ExportBigTiff / background-subtract" })
 Show-Check "BigStitcher-Spark" $hasSpark            $(if ($hasSpark) { $sparkJar } else { "build into $toolsDir\BigStitcher-Spark  (see luxendo\INSTALL.md section 4)" })
 Show-Check "Dataset (bdv.xml)" $hasData   $(if ($hasData) { $bdv } else { "place your Luxendo bdv.xml + bdv.h5 under $BaseDir" })
 Show-Check "python on PATH"    $hasPython $(if ($hasPython) { $pythonCmd.Source } else { "install Python 3 + numpy/h5py  (see luxendo\INSTALL.md section 5)" })
