@@ -119,6 +119,7 @@ install_command () {
 
 echo 'Installing workflow tools ...'
 
+install_command gui "net.preibisch.bigstitcher.spark.BigStitcherGUI"
 install_command resave "net.preibisch.bigstitcher.spark.SparkResaveN5"
 install_command detect-interestpoints "net.preibisch.bigstitcher.spark.SparkInterestPointDetection"
 install_command match-interestpoints "net.preibisch.bigstitcher.spark.SparkGeometricDescriptorMatching"

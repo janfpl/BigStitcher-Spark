@@ -41,16 +41,18 @@ cd BigStitcher-Spark
 ```
 This builds the code and writes the command-line tools (`resave`, `stitching`, `solver`, `affine-fusion`, `detect-interestpoints`, …) into the current directory.
 
-**3. Run.** BigStitcher-Spark is **headless** — there is no `./gui`. It is designed to work hand-in-hand with the interactive **BigStitcher GUI**, so you can drive it either way:
+**3. Run.** Drive it interactively or from the command line — every tool takes an existing BigStitcher project XML:
 
-- **Use the GUI (BigStitcher in Fiji).** The interactive GUI lives in **[Fiji](https://imagej.net/software/fiji/)**: enable it once under *Help ▸ Update… ▸ Manage update sites ▸ BigStitcher*, then **open your `dataset.xml`** via *Plugins ▸ BigStitcher ▸ BigStitcher* to define the dataset and run or **visually verify any step**. Because every Spark tool reads and writes that same XML, you can run a heavy step headless and re-open the XML in the GUI to inspect the result at any point.
-- **Or run a single headless command** — each tool takes an existing XML. For example, resave a dataset into N5 for processing:
+- **Open the GUI** on your dataset — the interactive BigStitcher explorer, where you can define, run, and visually verify each step:
+  ```bash
+  ./gui -x /path/to/dataset.xml
+  ```
+- **Or run a single headless step**, e.g. resave a dataset into N5 for processing:
+  ```bash
+  ./resave -x /path/to/dataset.xml
+  ```
 
-```bash
-./resave -x /path/to/dataset.xml
-```
-
-The Spark tools mostly mirror the BigStitcher GUI's options; see [Usage](#usage) for each module.
+Because the GUI and the Spark tools share the same XML, you can run a heavy step headless and then re-open the XML in the GUI to inspect the result. The Spark tools mostly mirror the BigStitcher GUI's options; see [Usage](#usage) for each module.
 
 ## Content
 
@@ -79,7 +81,7 @@ The Spark tools mostly mirror the BigStitcher GUI's options; see [Usage](#usage)
 
 * Prerequisites:  **Java** (_[Zulu JDK 8 + FX](https://www.azul.com/downloads/?version=java-8-lts&package=jdk-fx#zulu) is tested, and Java >=21 currently does not work with the Spark version used_) and **[Apache Maven](https://maven.apache.org)** must be installed. Try `java -version` and `mvn -v` to confirm their functionality and versions. You have to set the `JAVA_HOME` environment variable for Maven to find the right Java.
 * Clone the repo and `cd` into `BigStitcher-Spark`
-* Run the included bash script `./install -t <num-cores> -m <mem-in-GB> ` specifying the number of cores and available memory in GB for running locally. This should build the project and create the executable `resave`, `detect-interestpoints`, `register-interestpoints`, `stitching`, `solver`, `affine-fusion`, `nonrigid-fusion`, `downsample`, `clear-interestpoints` and `clear-registrations` in the working directory.
+* Run the included bash script `./install -t <num-cores> -m <mem-in-GB> ` specifying the number of cores and available memory in GB for running locally. This should build the project and create the executable `gui` (opens the interactive BigStitcher GUI on an XML), `resave`, `detect-interestpoints`, `register-interestpoints`, `stitching`, `solver`, `affine-fusion`, `nonrigid-fusion`, `downsample`, `clear-interestpoints` and `clear-registrations` in the working directory.
 
 If you run the code directly from your IDE, you will need to add JVM paramters for the local Spark execution (e.g. 8 cores, 50GB RAM):
 ```
