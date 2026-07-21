@@ -49,9 +49,36 @@ $FijiAppDir = Join-Path $BaseDir 'Fiji.app'
 
 $toolsDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
+function Get-FijiJavaExe([string] $app) {
+    # Locate java.exe inside a Fiji install regardless of how its bundled JVM folder is
+    # named or nested. Older Fiji uses java\win64\<*jdk*>\bin\java.exe; newer builds lay
+    # it out differently, so search the whole 'java' subtree. Prefer a JDK (has javac.exe),
+    # then a win64 path, then the shortest path (the primary runtime, not a nested jre).
+    if (-not $app -or -not (Test-Path -LiteralPath $app)) { return $null }
+    $searchRoot = Join-Path $app 'java'
+    if (-not (Test-Path -LiteralPath $searchRoot)) { $searchRoot = $app }
+    $candidates = @(Get-ChildItem -LiteralPath $searchRoot -Recurse -File -Filter 'java.exe' -ErrorAction SilentlyContinue)
+    if ($candidates.Count -eq 0) { return $null }
+    $best = $candidates |
+        Sort-Object `
+            @{ Expression = { [bool](Test-Path -LiteralPath (Join-Path $_.DirectoryName 'javac.exe')) }; Descending = $true }, `
+            @{ Expression = { $_.FullName -match '\\win64\\' }; Descending = $true }, `
+            @{ Expression = { $_.FullName.Length }; Descending = $false } |
+        Select-Object -First 1
+    return $best.FullName
+}
+
 function Test-FijiApp([string] $app) {
-    if (-not $app -or -not (Test-Path -LiteralPath $app)) { return $false }
-    $jdk = Get-ChildItem -Directory (Join-Path $app 'java\win64') -ErrorAction SilentlyContinue |
+    return [bool](Get-FijiJavaExe $app)
+}
+
+function Test-WrapperJavaLayout([string] $app) {
+    # Mirror exactly what the shared wrappers (bigstitcher-spark.ps1 etc.) look for:
+    # a directory matching *jdk* directly under java\win64, containing bin\java.exe.
+    if (-not $app) { return $false }
+    $win64 = Join-Path $app 'java\win64'
+    if (-not (Test-Path -LiteralPath $win64)) { return $false }
+    $jdk = Get-ChildItem -Directory -LiteralPath $win64 -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -like '*jdk*' } |
         Select-Object -First 1
     return [bool]($jdk -and (Test-Path -LiteralPath (Join-Path $jdk.FullName 'bin\java.exe')))
@@ -70,11 +97,19 @@ if (-not (Test-FijiApp $FijiAppDir)) {
     if ($found) { $FijiAppDir = $found.FullName }
 }
 if (-not (Test-FijiApp $FijiAppDir)) {
-    throw ("Could not find a Fiji install with a bundled JDK inside $BaseDir. " +
-        "Edit `$FijiAppDir at the top of this script to point at your Fiji.app " +
-        "(the folder that contains java\win64\*jdk*\bin\java.exe).")
+    throw ("Could not find a Fiji install (no java.exe under its 'java' folder) inside $BaseDir. " +
+        "Edit `$FijiAppDir at the top of this script to point at your Fiji.app.")
 }
+$fijiJavaExe = Get-FijiJavaExe $FijiAppDir
+$wrapperJavaOk = Test-WrapperJavaLayout $FijiAppDir
 Write-Host "Fiji:              $FijiAppDir"
+Write-Host "Fiji Java:         $fijiJavaExe"
+if (-not $wrapperJavaOk) {
+    Write-Host "NOTE: this Fiji's Java is not at java\win64\<*jdk*>\bin\java.exe, the exact spot the shared" -ForegroundColor Yellow
+    Write-Host "      pipeline wrappers (bigstitcher-spark.ps1 etc.) look in. This launcher finds it fine," -ForegroundColor Yellow
+    Write-Host "      but those wrappers would not until that lookup is relaxed. Share this output if you hit" -ForegroundColor Yellow
+    Write-Host "      it when running the actual pipeline and I will reconcile the wrappers too." -ForegroundColor Yellow
+}
 
 # --- Bridge Fiji into the layout the unchanged wrappers expect --------------
 # Wrappers look for <toolsDir>\fiji\Fiji.app\java\win64\*jdk*. If the real Fiji is
@@ -129,8 +164,10 @@ function Show-Check([string] $label, [bool] $ok, [string] $detail) {
 
 Write-Host ""
 Write-Host "Pre-flight for $BaseDir :"
-Show-Check "Fiji (JDK)"        $true      $FijiAppDir
-Show-Check "BigStitcher-Spark" $hasSpark  $(if ($hasSpark) { $sparkJar } else { "build into $toolsDir\BigStitcher-Spark  (see luxendo\INSTALL.md section 4)" })
+Show-Check "Fiji"              $true                $FijiAppDir
+Show-Check "Fiji Java"         ([bool]$fijiJavaExe) $(if ($fijiJavaExe) { $fijiJavaExe } else { "no java.exe under $FijiAppDir\java" })
+Show-Check "Wrapper Java path" $wrapperJavaOk       $(if ($wrapperJavaOk) { "java\win64\<*jdk*>\bin\java.exe present" } else { "not under java\win64\<*jdk*> (shared wrappers may need the relaxed lookup)" })
+Show-Check "BigStitcher-Spark" $hasSpark            $(if ($hasSpark) { $sparkJar } else { "build into $toolsDir\BigStitcher-Spark  (see luxendo\INSTALL.md section 4)" })
 Show-Check "Dataset (bdv.xml)" $hasData   $(if ($hasData) { $bdv } else { "place your Luxendo bdv.xml + bdv.h5 under $BaseDir" })
 Show-Check "python on PATH"    $hasPython $(if ($hasPython) { $pythonCmd.Source } else { "install Python 3 + numpy/h5py  (see luxendo\INSTALL.md section 5)" })
 Write-Host ""
@@ -140,8 +177,13 @@ if (-not ($hasSpark -and $hasData -and $hasPython)) {
     Write-Host "Finish the [MISS] items above, then re-run this launcher (extra args pass through to run_pipeline.ps1):"
     Write-Host "  .\$(Split-Path -Leaf $MyInvocation.MyCommand.Path) -SeparateViews -ExportBigTiff"
     Write-Host ""
-    Write-Host "Note: the classic BigStitcher route (run-bigstitcher-classic.cmd / run-fiji-headless.cmd) needs only Fiji"
-    Write-Host "      and works now, without building BigStitcher-Spark."
+    if ($wrapperJavaOk) {
+        Write-Host "Note: the classic BigStitcher route (run-bigstitcher-classic.cmd / run-fiji-headless.cmd) needs only Fiji"
+        Write-Host "      and works now, without building BigStitcher-Spark."
+    } else {
+        Write-Host "Note: the classic wrappers (run-bigstitcher-classic.cmd / run-fiji-headless.cmd) use the same" -ForegroundColor Yellow
+        Write-Host "      java\win64\<*jdk*> lookup flagged above, so they will not find this Fiji's Java yet either." -ForegroundColor Yellow
+    }
     exit 0
 }
 
