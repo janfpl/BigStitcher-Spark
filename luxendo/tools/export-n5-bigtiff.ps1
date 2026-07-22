@@ -50,7 +50,17 @@ if (-not (Test-Path -LiteralPath $java)) {
     $java = Join-Path $javaRoot.FullName "jre\bin\java.exe"
 }
 if (-not (Test-Path -LiteralPath $javac)) {
-    throw "No Java compiler at $javac (this Fiji appears to bundle a JRE only). Exporting BigTIFF compiles a small Java helper and needs a JDK. Install Zulu JDK 8 + FX and point the tools at it."
+    # Fiji bundles a JRE (no javac); fall back to a system JDK via JAVA_HOME, then PATH.
+    $javac = $null
+    if ($env:JAVA_HOME -and (Test-Path -LiteralPath (Join-Path $env:JAVA_HOME "bin\javac.exe"))) {
+        $javac = Join-Path $env:JAVA_HOME "bin\javac.exe"
+    } else {
+        $javacCmd = Get-Command javac -ErrorAction SilentlyContinue
+        if ($javacCmd) { $javac = $javacCmd.Source }
+    }
+    if (-not $javac) {
+        throw "No Java compiler found: Fiji bundles a JRE (no javac) and none was found via JAVA_HOME or PATH. Exporting BigTIFF compiles a small Java helper and needs a JDK. Install Zulu JDK 8 + FX (set JAVA_HOME), or omit -ExportBigTiff."
+    }
 }
 
 if ((-not (Test-Path -LiteralPath $classFile)) -or

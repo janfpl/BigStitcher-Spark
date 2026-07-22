@@ -115,18 +115,28 @@ if (-not (Test-FijiApp $FijiAppDir)) {
 }
 $fijiJavaExe = Get-FijiJavaExe $FijiAppDir
 $wrapperJavaOk = Test-WrapperJavaLayout $FijiAppDir
+# javac (needed by -ExportBigTiff and background-subtract) can come from Fiji's bundled JDK,
+# or, if Fiji ships a JRE, from a system JDK via JAVA_HOME then PATH.
 $fijiJavac = Get-FijiJavac $FijiAppDir
+$systemJavac = $null
+if ($env:JAVA_HOME -and (Test-Path -LiteralPath (Join-Path $env:JAVA_HOME 'bin\javac.exe'))) {
+    $systemJavac = Join-Path $env:JAVA_HOME 'bin\javac.exe'
+} else {
+    $javacCmd = Get-Command javac -ErrorAction SilentlyContinue
+    if ($javacCmd) { $systemJavac = $javacCmd.Source }
+}
+$javac = if ($fijiJavac) { $fijiJavac } elseif ($systemJavac) { $systemJavac } else { $null }
 Write-Host "Fiji:              $FijiAppDir"
 Write-Host "Fiji Java:         $fijiJavaExe"
 if (-not $wrapperJavaOk) {
     Write-Host "NOTE: this Fiji's Java is not under java\win64\<*jdk*> where the shared wrappers look;" -ForegroundColor Yellow
     Write-Host "      the pipeline wrappers may not find it. Share this output and I will reconcile them." -ForegroundColor Yellow
 }
-if (-not $fijiJavac) {
-    Write-Host "NOTE: this Fiji bundles a JRE (no javac found). Core registration/fusion works, but" -ForegroundColor Yellow
-    Write-Host "      -ExportBigTiff and background-subtract (FusionSubtract, on by default) compile a small" -ForegroundColor Yellow
-    Write-Host "      Java helper and need a JDK. Install Zulu JDK 8 + FX, or run with -FusionSubtract 0 and" -ForegroundColor Yellow
-    Write-Host "      without -ExportBigTiff." -ForegroundColor Yellow
+if (-not $javac) {
+    Write-Host "NOTE: this Fiji bundles a JRE (no javac), and no system JDK was found via JAVA_HOME or PATH." -ForegroundColor Yellow
+    Write-Host "      Core registration/fusion works, but -ExportBigTiff and background-subtract (FusionSubtract," -ForegroundColor Yellow
+    Write-Host "      on by default) compile a small Java helper and need a JDK. Install Zulu JDK 8 + FX and set" -ForegroundColor Yellow
+    Write-Host "      JAVA_HOME, or run with -FusionSubtract 0 and without -ExportBigTiff." -ForegroundColor Yellow
 }
 
 # --- Bridge Fiji into the layout the unchanged wrappers expect --------------
@@ -185,7 +195,7 @@ Write-Host "Pre-flight for $BaseDir :"
 Show-Check "Fiji"              $true                $FijiAppDir
 Show-Check "Fiji Java"         ([bool]$fijiJavaExe) $(if ($fijiJavaExe) { $fijiJavaExe } else { "no java.exe under $FijiAppDir\java" })
 Show-Check "Wrapper Java path" $wrapperJavaOk       $(if ($wrapperJavaOk) { "java under java\win64\<*jdk*> (bin or jre\bin)" } else { "not under java\win64\<*jdk*>" })
-Show-Check "JDK compiler javac" ([bool]$fijiJavac)  $(if ($fijiJavac) { $fijiJavac } else { "JRE only - needed for -ExportBigTiff / background-subtract" })
+Show-Check "JDK compiler javac" ([bool]$javac)      $(if ($javac) { $javac } else { "not found (Fiji JRE + no JAVA_HOME/PATH javac) - needed for -ExportBigTiff / background-subtract" })
 Show-Check "BigStitcher-Spark" $hasSpark            $(if ($hasSpark) { $sparkJar } else { "build into $toolsDir\BigStitcher-Spark  (see luxendo\INSTALL.md section 4)" })
 Show-Check "Dataset (bdv.xml)" $hasData   $(if ($hasData) { $bdv } else { "place your Luxendo bdv.xml + bdv.h5 under $BaseDir" })
 Show-Check "python on PATH"    $hasPython $(if ($hasPython) { $pythonCmd.Source } else { "install Python 3 + numpy/h5py  (see luxendo\INSTALL.md section 5)" })
